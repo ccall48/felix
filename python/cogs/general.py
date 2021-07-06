@@ -42,6 +42,7 @@ class General(commands.Cog, name='General'):
         self.load_cat_http_codes.start()
         self.load_dog_http_codes.start()
         self.load_chuck_http_codes.start()
+        self.re_converter = re.compile(r'(?i)(?P<num>[0-9]+(?:\.[0-9]*)?)\s?(?P<unit>[a-zA-Z°]+)')
 
     @tasks.loop(count=1)
     async def load_cat_http_codes(self):
@@ -169,6 +170,34 @@ class General(commands.Cog, name='General'):
             msg.content
         ):
             await msg.channel.send('ฅ^•ﻌ•^ฅ')
+
+        if match := self.re_converter.search(msg.content):
+            unit_aliases = {
+                'mile' : 'miles',
+                'kilometer' : 'km',
+                'kilometers' : 'km',
+                'kilometre' : 'km',
+                'kilometres' : 'km',
+                'fahrenheit' : '°f',
+                '°fahrenheit' : '°f',
+                'celsius' : '°c',
+                '°celsius' : '°c',
+            }
+            conversions = {
+                'miles': (lambda x:x*1.609344, 'km'),
+                'km': (lambda x:x*0.6213712, 'miles'),
+                '°f': (lambda x:(x-32)/1.8, '°C'),
+                '°c': (lambda x:x*1.8+32, '°F'),
+                'lb': (lambda x:x*0.4535924, 'kg'),
+                'kg': (lambda x:x*2.204623, 'lb'),
+            }
+            n, unit = match.groups()
+            if unit.lower() not in unit_aliases | conversions:
+                return
+            unit = unit_aliases.get(unit.lower(), unit)
+            n = float(n)
+            converter, new = conversions[unit]
+            await msg.channel.send(f'{round(n, 2)} {unit} = {round(converter(n), 2)} {new}')
 
     # ----------------------------------------------
     # Cog Commands
@@ -775,7 +804,7 @@ class General(commands.Cog, name='General'):
 
     # ------------------------------------------------------------------------
 
-    @ staticmethod
+    @staticmethod
     def result_fmt(url: str, language: str, body_text: str) -> str:
         """Format Result."""
         body_space=min(1992 - len(language) - len(url), 1000)
