@@ -616,6 +616,7 @@ class General(commands.Cog, name='General'):
             location = f"{location} {units}"
             units = "m"
         location = location.replace('.png', '')
+        location = location.replace('`', '')
         moon = location.startswith('moon')
         url = (
             'https://wttr.in/'
@@ -658,8 +659,8 @@ class General(commands.Cog, name='General'):
         sauce = ''.join(saucelines)
         # Little hack so triple quotes don't end discord codeblocks when printed
         sanitized = sauce.replace('`', '\u200B`')
-        if len(sanitized) > 1900:
-            sanitized = sanitized[:1900] + '\n[...]'
+        if len(url) + len(sanitized) > 1950:
+            sanitized = sanitized[:1950-len(url)] + '\n[...]'
         await ctx.send(url + f'```python\n{sanitized}\n```')
 
     @commands.command(
