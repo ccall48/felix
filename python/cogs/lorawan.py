@@ -9,6 +9,7 @@ Commands:
     deviceprofile|dp    Show setup profile for device UUID for device profile
     networkserver|ns    network server information for given ID
     gateways|gw         gateway stats for organization ID
+    gateway_stat|gstat gateway stats for number of days specified
      ├
      └
 """
@@ -48,7 +49,8 @@ class Lorawan(commands.Cog, name='Lorawan'):
 
             text = ''
             for app in lora['result']:
-                text += f"Organization ID: {app['organizationID']}\nName: {app['name']}\nDesc: {app['description']}\nProfile ID: {app['serviceProfileID']}\nProfile Name: {app['serviceProfileName']}\n\n"
+                # text += f"Organization ID: {app['organizationID']}\nName: {app['name']}\nDesc: {app['description']}\nProfile ID: {app['serviceProfileID']}\nProfile Name: {app['serviceProfileName']}\n\n"
+                text += f"{app['description']}\nProfile ID: {app['serviceProfileID']}\n\n"
 
             embed.add_field(name='Applications', value=text)
             embed.set_author(
@@ -269,6 +271,46 @@ class Lorawan(commands.Cog, name='Lorawan'):
             embed.add_field(name='Active', value=lora['activeCount'], inline=True)
             embed.add_field(name='Inactive', value=lora['inactiveCount'], inline=True)
             embed.add_field(name='Never Seen', value=lora['neverSeenCount'], inline=True)
+
+            embed.set_author(
+                name='Chirpstack Dred',
+                url='https://chirpstack.dred.net.au',
+                icon_url='https://dred.net.au/static/csw_icon.png')
+
+            await ctx.send(embed=embed)
+
+
+    @commands.command(name='gateway_stat',
+        aliases=['gstat']
+        )
+    async def gateway_stats(self, ctx, gw_id, num_days: int):
+        """Show a gateway stats for number of given days"""
+        dt_from = (dt.utcnow() - td(days=(num_days-1))).strftime('%Y-%m-%dT00:00:00Z')
+        dt_now = (dt.utcnow() + td(hours=10)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        async with self.client.session.get(
+            f'{self.api_url}/gateways/{gw_id}/stats?interval=day&startTimestamp={dt_from}&endTimestamp={dt_now}',
+            headers=self.headers
+            ) as response:
+
+            gw_stats = await response.json()
+
+            gw_data = {}
+            for data in gw_stats['result']:
+                for key, value in data.items():
+                    if key != 'timestamp':
+                        if key not in gw_data.keys():
+                            gw_data[key] = value
+                        else:
+                            gw_data[key] += value
+
+            embed = Embed(description=f'{gw_id} Gateway Stats',
+                        color=random.randint(0, 0xFFFFFF))
+
+            embed.add_field(name='RX Packets', value=gw_data['rxPacketsReceived'], inline=False)
+            embed.add_field(name='RX Packets OK', value=gw_data['rxPacketsReceivedOK'], inline=False)
+            embed.add_field(name='TX Received', value=gw_data['txPacketsReceived'], inline=False)
+            embed.add_field(name='TX Sent', value=gw_data['txPacketsEmitted'], inline=False)
 
             embed.set_author(
                 name='Chirpstack Dred',
