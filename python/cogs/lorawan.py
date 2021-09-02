@@ -287,6 +287,7 @@ class Lorawan(commands.Cog, name='Lorawan'):
         """Show a gateway stats for number of given days"""
         dt_from = (dt.utcnow() - td(days=(num_days-1))).strftime('%Y-%m-%dT00:00:00Z')
         dt_now = (dt.utcnow() + td(hours=10)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        dt_test = datetime.utcnow() - timedelta(minutes=5)
 
         async with self.client.session.get(
             f'{self.api_url}/gateways/{gw_id}/stats?interval=day&startTimestamp={dt_from}&endTimestamp={dt_now}',
