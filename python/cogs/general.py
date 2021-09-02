@@ -42,7 +42,7 @@ class General(commands.Cog, name='General'):
         self.load_cat_http_codes.start()
         self.load_dog_http_codes.start()
         self.load_chuck_http_codes.start()
-        self.re_converter = re.compile(r'(?i)(?P<num>[0-9]+(?:\.[0-9]*)?)\s?(?P<unit>[a-zA-Z°]+)')
+        self.re_converter = re.compile(r'(?i)(?P<num>-?[0-9]+(?:\.[0-9]*)?)\s?(?P<unit>[a-zA-Z°]+)')
 
     @tasks.loop(count=1)
     async def load_cat_http_codes(self):
@@ -170,6 +170,12 @@ class General(commands.Cog, name='General'):
             msg.content
         ):
             await msg.channel.send('ฅ^•ﻌ•^ฅ')
+
+        if re.search(
+            r'(?i)^felix what(?:\'s| is) the answer to life,? the universe and everything',
+            msg.content
+        ):
+            await msg.channel.send('42')
 
         if match := self.re_converter.search(msg.content):
             unit_aliases = {
