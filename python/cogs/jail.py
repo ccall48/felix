@@ -22,6 +22,9 @@ Only users that have an admin role can use the commands.
 import re
 import json
 import time
+from io import BytesIO
+from PIL import Image
+from pyzbar.pyzbar import decode
 from collections import deque
 from dataclasses import dataclass, field
 from discord.ext import commands, tasks
@@ -210,12 +213,12 @@ class Jail(commands.Cog, name='Jail'):
         )
         return True
 
-    async def post_spam_report(self, msg):
+    async def post_spam_report(self, msg, spam_type, attach_link=None):
         """Post spam report of auto jailing to report channel"""
         target = self.client.get_channel(self.REPORT_CHANNEL_ID)
         embed = Embed(
-            title='Phishing Link Detected!',
-            description=msg.content,
+            title=f'{spam_type} Link Detected!',
+            description=msg.content if attach_link is None else attach_link,
             color=0xFFFFFF
         )
         await target.send(
@@ -275,9 +278,25 @@ class Jail(commands.Cog, name='Jail'):
             if self.is_spam.findall(msg.content) and msg.channel.id != self.JAIL_CHANNEL_ID:
                 # Ignore reporting if offender is already in jail for spam
                 await self.send_to_jail(member, reason='Sent illegal spam')
-                await self.post_spam_report(msg)
+                await self.post_spam_report(msg, 'Phishing')
                 # Clean up and remove message from channel after delay = seconds
                 await msg.delete(delay=3)
+
+        if msg.attachments and msg.channel.id != self.JAIL_CHANNEL_ID:
+            # Ignore reporting if offender is already in jail
+            image_ext = ['png', 'gif', 'jpg', 'jpeg']
+            for attach in msg.attachments:
+                ext = [elm for elm in image_ext if str(attach).endswith(elm)]
+                if len(ext) > 0:
+                    async with self.client.session.get(str(attach)) as response:
+                        resp = await response.read()
+                        data = decode(Image.open(BytesIO(resp)))
+                        if data:
+                            if data[0][0].decode().startswith('https://discord.com/ra/'):
+                                await self.send_to_jail(member, reason='Leaked QR Code')
+                                await self.post_spam_report(msg, 'QR Code', str(attach))
+                                # Clean up and remove message from channel after delay = seconds
+                                await msg.delete(delay=3)
 
         now = time.time()
         uid = str(member.id)
