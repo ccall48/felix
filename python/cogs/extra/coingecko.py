@@ -38,7 +38,12 @@ class Coingecko(commands.Cog, name='Coin'):
     @tasks.loop(count=1)
     async def supported_tokens(self):
         async with self.client.session.get(f'{self.api_base}/coins/list') as response:
-            self.tokens = [token['id'] for token in await response.json()]
+            self.tokens = [(token['id'], token['symbol']) for token in await response.json()]
+
+    def get_token(self, token: str):
+        for (token_id, token_symbol) in self.tokens:
+            if token.lower() in (token_id.lower(), token_symbol.lower()):
+                return token_id
 
     # ----------------------------------------------
     # coingecko simple api cog commands
@@ -84,7 +89,8 @@ class Coingecko(commands.Cog, name='Coin'):
     )
     async def token_price(self, ctx, *token):
         """Current price for {token} or {token1} {token2} {token3}"""
-        tokens = ','.join((x for x in token))
+        tokens = ','.join((str(self.get_token(x)) for x in token))
+
         async with self.client.session.get(
             f'{self.api_base}/simple/price?ids={tokens}&vs_currencies={self.currency}'+
             f'&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true'
@@ -140,21 +146,22 @@ class Coingecko(commands.Cog, name='Coin'):
 
     @coin.command(
         name='value',
-        aliases=['howmuch']
+        aliases=['val', 'howmuch']
     )
     async def token_amount(self, ctx, token: str, currency: str, amt:float=None):
         """Current value for X amount of tokens. {token} {currency} {amount}"""
-        token = token.lower()
+        token_err = token
+        token = self.get_token(token.lower())
         async with self.client.session.get(
             f'{self.api_base}/simple/price?ids={token}&vs_currencies={currency}'
         ) as response:
             data = await response.json()
 
-            if token not in self.tokens:
+            if not token:
                 embed = Embed(
                         color=0xFFFF00,
                         title='Error',
-                        description=f'Token: `{token}` invalid or not found!'
+                        description=f'Token: `{token_err}` invalid or not found!'
                     )
                 embed.set_footer(
                     text=f'https://coingecko.com/',
