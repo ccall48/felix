@@ -4,24 +4,31 @@ it collects current crypto prices from coingecko simple api
 Commands:
     coin
     ├ price         full name of token eg. bitcoin for multiple leave a space
-    ├ value         current market price for token 
+    ├ value         current market price for token
+    ├ graph         price graph for token 
     ├ tokens        WIP > list of all tokens on coingeko
     └ currencies    WIP > all conversion possible currencies for comparisons (default USD)
 """
 
 import asyncio
+from datetime import datetime as dt
+
+import pandas as pd
+import matplotlib.pyplot as plt
 
 from discord.ext import commands, tasks
-from discord import Embed
+from discord import Embed, File
 
 
 class Coingecko(commands.Cog, name='Coin'):
     API_URL_BASE = 'https://api.coingecko.com/api/v3'
+    CG_ICON = 'https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
 
-    def __init__(self, client, currency='usd', api_base=API_URL_BASE):
+    def __init__(self, client, currency='usd', api_base=API_URL_BASE, cg_icon=CG_ICON):
         self.client = client
         self.currency = currency
         self.api_base = api_base
+        self.cg_icon = cg_icon
 
         self.supported_currencies.start()
         self.supported_tokens.start()
@@ -44,6 +51,31 @@ class Coingecko(commands.Cog, name='Coin'):
         for (token_id, token_symbol) in self.tokens:
             if token.lower() in (token_id.lower(), token_symbol.lower()):
                 return token_id
+
+    async def create_token_graph(self, num_days: int, token: str, vs_currency: str):
+        async with self.client.session.get(
+            f'{self.api_base}/coins/{token}/market_chart?vs_currency={vs_currency}'+
+            f'&days={num_days}&interval=daily'
+        ) as response:
+            data = await response.json()
+
+            df = pd.DataFrame(data['prices'])
+            df['dt'] = pd.to_datetime((df[0] // 1000), unit='s')
+            df[1] = round(df[1], 2)
+
+            heading_font = {'family': 'serif', 'color': 'green', 'size': 25}
+            label_font = {'family': 'serif', 'color': 'red', 'size': 15}
+
+            plt.title(f'{token.title()} Price Graph', fontdict=heading_font)
+            plt.ylabel(f'Price {vs_currency.upper()}', fontdict=label_font)
+
+            plt.plot(df['dt'], df[1])
+            plt.grid(axis='y')
+            plt.tick_params(axis='x', rotation=25)
+            plt.savefig('token_graph.png')
+            plt.cla()
+            return True
+
 
     # ----------------------------------------------
     # coingecko simple api cog commands
@@ -74,11 +106,11 @@ class Coingecko(commands.Cog, name='Coin'):
                         description=[x for x in data.values()][0],
                     )
             embed.set_thumbnail(
-                url='https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
+                url=self.cg_icon
             )
             embed.set_footer(
                 text=f'https://coingecko.com/',
-                icon_url='https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
+                icon_url=self.cg_icon
                 )
             await ctx.send(embed=embed)
 
@@ -104,7 +136,7 @@ class Coingecko(commands.Cog, name='Coin'):
                         url=f'https://www.coingecko.com/en/coins/{tokens}'
                     )
                 embed.set_thumbnail(
-                    url='https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
+                    url=self.cg_icon
                 )
                 for desc, value in prices.items():
                     match desc:
@@ -138,7 +170,7 @@ class Coingecko(commands.Cog, name='Coin'):
                             )
                 embed.set_footer(
                 text=f'https://coingecko.com/',
-                icon_url='https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
+                icon_url=self.cg_icon
                 )
                 await ctx.send(embed=embed)
                 await asyncio.sleep(1)
@@ -165,7 +197,7 @@ class Coingecko(commands.Cog, name='Coin'):
                     )
                 embed.set_footer(
                     text=f'https://coingecko.com/',
-                    icon_url='https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
+                    icon_url=self.cg_icon
                 )
                 return await ctx.send(embed=embed)
 
@@ -178,7 +210,7 @@ class Coingecko(commands.Cog, name='Coin'):
                     )
                 embed.set_footer(
                     text=f'https://coingecko.com/',
-                    icon_url='https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
+                    icon_url=self.cg_icon
                 )
                 return await ctx.send(embed=embed)
 
@@ -190,7 +222,7 @@ class Coingecko(commands.Cog, name='Coin'):
                     )
                 embed.set_footer(
                     text=f'https://coingecko.com/',
-                    icon_url='https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
+                    icon_url=self.cg_icon
                 )
                 return await ctx.send(embed=embed)
 
@@ -200,7 +232,7 @@ class Coingecko(commands.Cog, name='Coin'):
                         url=f'https://www.coingecko.com/en/coins/{token}'
                     )
             embed.set_thumbnail(
-                url='https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
+                url=self.cg_icon
             )
             embed.add_field(
                 name='Token Amt',
@@ -214,9 +246,27 @@ class Coingecko(commands.Cog, name='Coin'):
             )
             embed.set_footer(
                 text=f'https://coingecko.com/',
-                icon_url='https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
+                icon_url=self.cg_icon
             )
         await ctx.send(embed=embed)
+
+
+    @coin.command(
+        name='graph',
+        aliases=['g', 'chart']
+    )
+    async def token_graph(self, ctx, num_days: int, token: str, vs_currency: str):
+        """Price graph for token, {num_days} {token} {vs_currency}"""
+        token = self.get_token(token)
+
+        await ctx.typing()
+        if await self.create_token_graph(num_days, token, vs_currency):
+            with open('token_graph.png', 'rb') as token_graph:
+                file_to_send = File(token_graph)
+            await ctx.send(file=file_to_send)
+        else:
+            await ctx.send('Nothing found')
+
 
     # ----------------------------------------------
     # Cog Tasks
