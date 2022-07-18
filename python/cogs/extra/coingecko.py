@@ -103,7 +103,7 @@ class Coingecko(commands.Cog, name='Coin'):
             embed = Embed(
                         color=0xFFFF00,
                         title=[x for x in data.keys()][0].replace('_', ' ').title(),
-                        description=[x for x in data.values()][0],
+                        description=f'{[x for x in data.values()][0]} :rocket:',
                     )
             embed.set_thumbnail(
                 url=self.cg_icon
@@ -184,6 +184,7 @@ class Coingecko(commands.Cog, name='Coin'):
         """Current value for X amount of tokens. {token} {currency} {amount}"""
         token_err = token
         token = self.get_token(token.lower())
+
         async with self.client.session.get(
             f'{self.api_base}/simple/price?ids={token}&vs_currencies={currency}'
         ) as response:
@@ -257,7 +258,33 @@ class Coingecko(commands.Cog, name='Coin'):
     )
     async def token_graph(self, ctx, num_days: int, token: str, vs_currency: str):
         """Price graph for token, {num_days} {token} {vs_currency}"""
+        token_err = token
         token = self.get_token(token)
+
+        if not token:
+            embed = Embed(
+                    color=0xFFFF00,
+                    title='Error',
+                    description=f'Token: `{token_err}` invalid or not found!'
+                )
+            embed.set_footer(
+                text=f'https://coingecko.com/',
+                icon_url=self.cg_icon
+            )
+            return await ctx.send(embed=embed)
+
+        if vs_currency not in self.currencies:
+            embed = Embed(
+                    color=0xFFFF00,
+                    title='Error',
+                    description=f"{vs_currency.upper()} not found, supported currencies:\n"+
+                                f"```{', '.join([x for x in self.currencies])}```"
+                )
+            embed.set_footer(
+                text=f'https://coingecko.com/',
+                icon_url=self.cg_icon
+            )
+            return await ctx.send(embed=embed)
 
         await ctx.typing()
         if await self.create_token_graph(num_days, token, vs_currency):
@@ -271,7 +298,6 @@ class Coingecko(commands.Cog, name='Coin'):
     # ----------------------------------------------
     # Cog Tasks
     # ----------------------------------------------
-
 async def setup(client):
     """This is called when the cog is loaded via load_extension"""
     await client.add_cog(Coingecko(client))
