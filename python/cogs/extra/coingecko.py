@@ -64,6 +64,7 @@ class Coingecko(commands.Cog, name='Coin'):
         else:
             plt.title('Multiple Tokens', fontdict=headings)
 
+        plt.figure(figsize=[12.8, 9.6])
         plt.xlabel(f'Last {num_days} Days', fontdict=labels)
         plt.ylabel(f'Price {vs_currency.upper()}', fontdict=labels)
         plt.grid(axis='y')
