@@ -119,9 +119,9 @@ class Coingecko(commands.Cog, name='Coin'):
         name='price',
         aliases=['$']
     )
-    async def token_price(self, ctx, *token):
+    async def token_price(self, ctx, *coins):
         """Current price for {token} or {token1} {token2} {token3}"""
-        tokens = ','.join((str(self.get_token(x)) for x in token))
+        tokens = ','.join((str(self.get_token(x)) for x in coins))
 
         async with self.client.session.get(
             f'{self.api_base}/simple/price?ids={tokens}&vs_currencies={self.currency}'+
@@ -129,51 +129,51 @@ class Coingecko(commands.Cog, name='Coin'):
         ) as response:
             data = await response.json()
 
-            for tokens, prices in data.items():
-                embed = Embed(
-                        color=0xFFFF00,
-                        title=f'{tokens.title()} Price',
-                        url=f'https://www.coingecko.com/en/coins/{tokens}'
-                    )
-                embed.set_thumbnail(
-                    url=self.cg_icon
-                )
-                for desc, value in prices.items():
-                    match desc:
-                        case 'usd':
-                            value = round(value, 2)
-                            embed.add_field(
-                                name='Price (USD)',
-                                value='$' + '{:,}'.format(value),
-                                inline=True
-                            )
-                        case 'usd_market_cap':
-                            value = int(round(value, 0))
-                            embed.add_field(
-                                name='Market Cap (USD)',
-                                value='{:,}'.format(value),
-                                inline=True
-                            )
-                        case 'usd_24h_vol':
-                            value = int(round(value, 0))
-                            embed.add_field(
-                                name='24hr Volume (USD)',
-                                value='{:,}'.format(value),
-                                inline=True
-                            )
-                        case 'usd_24h_change':
-                            value = round(value, 2)
-                            embed.add_field(
-                                name='24hr Change (USD)',
-                                value='{:,}'.format(value) + '%',
-                                inline=True
-                            )
-                embed.set_footer(
+            embed = Embed(color=0xFFFF00)
+            #embed = Embed(
+            #            color=0xFFFF00,
+            #            title=f"{', '.join(self.get_token(x).title() for x in coins)}"
+            #        )
+            #embed.set_thumbnail(
+            #        url=self.cg_icon
+            #    )
+
+            embed.set_footer(
                 text=f'https://coingecko.com/',
                 icon_url=self.cg_icon
                 )
-                await ctx.send(embed=embed)
-                await asyncio.sleep(1)
+
+            #await ctx.send(embed=embed)
+            for token, prices in data.items():
+                token = token.title()
+                for desc, price_data in prices.items():
+                    match desc:
+                        case 'usd':
+                            embed.add_field(
+                                name=token + ' Price (USD)',
+                                value='$' + '{:,}'.format(round(price_data, 2)),
+                                inline=False
+                            )
+                        #case 'usd_market_cap':
+                        #    embed.add_field(
+                        #        name=token + ' Market Cap (USD)',
+                        #        value='{:,}'.format(int(price_data)),
+                        #        inline=False
+                        #    )
+                        case 'usd_24h_vol':
+                            embed.add_field(
+                                name=token + ' 24hr Vol (USD)',
+                                value='{:,}'.format(int(price_data)),
+                                inline=False
+                            )
+                        case 'usd_24h_change':
+                            embed.add_field(
+                                name=token + ' 24hr +/- (USD)',
+                                value='{:,}'.format(round(price_data, 2)) + '%',
+                                inline=False
+                            )
+
+            await ctx.send(embed=embed)
 
 
     @coin.command(
