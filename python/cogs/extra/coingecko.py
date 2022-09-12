@@ -69,6 +69,7 @@ class Coingecko(commands.Cog, name='Coin'):
         plt.grid(axis='y')
 
         for token in tokens:
+            ticker = token.upper()
             token = self.get_token(token)
 
             async with self.client.session.get(
@@ -81,7 +82,7 @@ class Coingecko(commands.Cog, name='Coin'):
             df['dt'] = pd.to_datetime((df[0] // 1000), unit='s')
             df['pr'] = round(df[1], 2)
 
-            plt.plot(df['dt'], df['pr'], label=token.title())
+            plt.plot(df['dt'], df['pr'], label=f'{ticker} - {token.title()}')
             plt.tick_params(axis='x', rotation=25)
             plt.legend()
 
