@@ -11,7 +11,6 @@ Commands:
 """
 
 import asyncio
-from datetime import datetime as dt
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -21,6 +20,8 @@ from discord import Embed, File
 
 
 class Coingecko(commands.Cog, name='Coin'):
+    """Custom wrapper around the official CoinGecko API:
+    Docs: https://www.coingecko.com/en/api/documentation"""
     API_URL_BASE = 'https://api.coingecko.com/api/v3'
     CG_ICON = 'https://cdn.discordapp.com/attachments/788621973709127693/988362901213548604/cg.webp'
 
@@ -29,10 +30,12 @@ class Coingecko(commands.Cog, name='Coin'):
         self.currency = currency
         self.api_base = api_base
         self.cg_icon = cg_icon
+        self.currencies = []
+        self.tokens = []
+        self.base_url = 'https://coingecko.com/'
 
-        self.supported_currencies.start()
-        self.supported_tokens.start()
-
+        self.supported_currencies.start()  # pylint: disable=E1101
+        self.supported_tokens.start()  # pylint: disable=E1101
 
     @tasks.loop(count=1)
     async def supported_currencies(self):
@@ -44,20 +47,23 @@ class Coingecko(commands.Cog, name='Coin'):
 
     @tasks.loop(count=1)
     async def supported_tokens(self):
+        """generate a list of supported tokens"""
         async with self.client.session.get(f'{self.api_base}/coins/list') as response:
             self.tokens = [(token['id'], token['symbol']) for token in await response.json()]
 
     # ----------------------------------------------
     # helper functions...
     # ----------------------------------------------
-    def get_token(self, token: str):
+    def get_token(self, token_partial_name_or_symbol: str):
+        """fetch a token by name or symbol and return the id"""
         for (token_id, token_symbol) in self.tokens:
-            if token.lower() in (token_id.lower(), token_symbol.lower()):
+            if token_partial_name_or_symbol.lower() in (token_id.lower(), token_symbol.lower()):
                 return token_id
 
     async def create_tokens_graph(self, num_days: int, vs_currency: str, *tokens):
-        labels = {'family':'serif','color':'red','size':15}
-        headings = {'family':'serif','color':'darkred','size':20}
+        """create a plot graph from a bunch of given tokens over a number of days"""
+        labels = {'family': 'serif', 'color': 'red', 'size': 15}
+        headings = {'family': 'serif', 'color': 'darkred', 'size': 20}
 
         if len(tokens) == 1:
             plt.title(self.get_token(tokens[0]).title(), fontdict=headings)
@@ -74,16 +80,16 @@ class Coingecko(commands.Cog, name='Coin'):
             token = self.get_token(token)
 
             async with self.client.session.get(
-                f'{self.api_base}/coins/{token}/market_chart?vs_currency={vs_currency}'+
+                f'{self.api_base}/coins/{token}/market_chart?vs_currency={vs_currency}' +
                 f'&days={num_days}&interval=daily'
             ) as response:
                 data = await response.json()
 
-            df = pd.DataFrame(data['prices'])
-            df['dt'] = pd.to_datetime((df[0] // 1000), unit='s')
-            df['pr'] = round(df[1], 2)
+            _df = pd.DataFrame(data['prices'])
+            _df['dt'] = pd.to_datetime((_df[0] // 1000), unit='s')
+            _df['pr'] = round(_df[1], 2)
 
-            plt.plot(df['dt'], df['pr'], label=f'{ticker} - {token.title()}')
+            plt.plot(_df['dt'], _df['pr'], label=f'{ticker} - {token.title()}')
             plt.tick_params(axis='x', rotation=25)
             plt.legend()
 
@@ -91,10 +97,10 @@ class Coingecko(commands.Cog, name='Coin'):
         plt.cla()
         return True
 
-
     # ----------------------------------------------
     # coingecko simple api cog commands
     # ----------------------------------------------
+
     @commands.group(
         pass_context=True,
         name='coingecko',
@@ -106,29 +112,28 @@ class Coingecko(commands.Cog, name='Coin'):
         "Commands to view current token prices"
         await ctx.send_help('coingecko')
 
-
     @coin.command(
         name='ping',
         hidden=True
     )
     async def coingecko_ping(self, ctx):
+        """ping the coingecko server to check the latency"""
         async with self.client.session.get(f'{self.api_base}/ping') as response:
             data = await response.json()
 
             embed = Embed(
-                        color=0xFFFF00,
-                        title=[x for x in data.keys()][0].replace('_', ' ').title(),
-                        description=f'{[x for x in data.values()][0]} :rocket:',
-                    )
+                color=0xFFFF00,
+                title=[x for x in data.keys()][0].replace('_', ' ').title(),
+                description=f'{[x for x in data.values()][0]} :rocket:',
+            )
             embed.set_thumbnail(
                 url=self.cg_icon
             )
             embed.set_footer(
-                text=f'https://coingecko.com/',
+                text=self.base_url,
                 icon_url=self.cg_icon
-                )
+            )
             await ctx.send(embed=embed)
-
 
     @coin.command(
         name='price',
@@ -139,17 +144,17 @@ class Coingecko(commands.Cog, name='Coin'):
         tokens = ','.join((str(self.get_token(x)) for x in token))
 
         async with self.client.session.get(
-            f'{self.api_base}/simple/price?ids={tokens}&vs_currencies={self.currency}'+
-            f'&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true'
+            f'{self.api_base}/simple/price?ids={tokens}&vs_currencies={self.currency}'
+            '&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true'
         ) as response:
             data = await response.json()
 
             for tokens, prices in data.items():
                 embed = Embed(
-                        color=0xFFFF00,
-                        title=f'{tokens.title()} Price',
-                        url=f'https://www.coingecko.com/en/coins/{tokens}'
-                    )
+                    color=0xFFFF00,
+                    title=f'{tokens.title()} Price',
+                    url=f'{self.base_url}en/coins/{tokens}'
+                )
                 embed.set_thumbnail(
                     url=self.cg_icon
                 )
@@ -159,43 +164,42 @@ class Coingecko(commands.Cog, name='Coin'):
                             value = round(value, 2)
                             embed.add_field(
                                 name='Price (USD)',
-                                value='$' + '{:,}'.format(value),
+                                value=f'${value:,}',
                                 inline=True
                             )
                         case 'usd_market_cap':
                             value = int(round(value, 0))
                             embed.add_field(
                                 name='Market Cap (USD)',
-                                value='{:,}'.format(value),
+                                value=f'{value:,}',
                                 inline=True
                             )
                         case 'usd_24h_vol':
                             value = int(round(value, 0))
                             embed.add_field(
                                 name='24hr Volume (USD)',
-                                value='{:,}'.format(value),
+                                value=f'{value:,}',
                                 inline=True
                             )
                         case 'usd_24h_change':
                             value = round(value, 2)
                             embed.add_field(
                                 name='24hr Change (USD)',
-                                value='{:,}'.format(value) + '%',
+                                value=f'{value:,}%',
                                 inline=True
                             )
                 embed.set_footer(
-                text=f'https://coingecko.com/',
-                icon_url=self.cg_icon
+                    text=self.base_url,
+                    icon_url=self.cg_icon
                 )
                 await ctx.send(embed=embed)
                 await asyncio.sleep(1)
-
 
     @coin.command(
         name='value',
         aliases=['val', 'howmuch']
     )
-    async def token_amount(self, ctx, token: str, currency: str, amt:float=None):
+    async def token_amount(self, ctx, token: str, currency: str, amt: float = None):
         """Current value for X amount of tokens. {token} {currency} {amount}"""
         token_err = token
         token = self.get_token(token.lower())
@@ -207,46 +211,46 @@ class Coingecko(commands.Cog, name='Coin'):
 
             if not token:
                 embed = Embed(
-                        color=0xFFFF00,
-                        title='Error',
-                        description=f'Token: `{token_err}` invalid or not found!'
-                    )
+                    color=0xFFFF00,
+                    title='Error',
+                    description=f'Token: `{token_err}` invalid or not found!'
+                )
                 embed.set_footer(
-                    text=f'https://coingecko.com/',
+                    text=self.base_url,
                     icon_url=self.cg_icon
                 )
                 return await ctx.send(embed=embed)
 
             if currency not in self.currencies:
                 embed = Embed(
-                        color=0xFFFF00,
-                        title='Error',
-                        description=f"{currency.upper()} not found, supported currencies:\n"+
-                                    f"```{', '.join([x for x in self.currencies])}```"
-                    )
+                    color=0xFFFF00,
+                    title='Error',
+                    description=f"{currency.upper()} not found, supported currencies:\n"
+                    f"```{', '.join(self.currencies)}```"
+                )
                 embed.set_footer(
-                    text=f'https://coingecko.com/',
+                    text=self.base_url,
                     icon_url=self.cg_icon
                 )
                 return await ctx.send(embed=embed)
 
             if not amt:
                 embed = Embed(
-                        color=0xFFFF00,
-                        title='Error',
-                        description=f'Amount `{amt}` not a valid amount.'
-                    )
+                    color=0xFFFF00,
+                    title='Error',
+                    description=f'Amount `{amt}` not a valid amount.'
+                )
                 embed.set_footer(
-                    text=f'https://coingecko.com/',
+                    text=self.base_url,
                     icon_url=self.cg_icon
                 )
                 return await ctx.send(embed=embed)
 
             embed = Embed(
-                        color=0xFFFF00,
-                        title=f'{token.title()} Price',
-                        url=f'https://www.coingecko.com/en/coins/{token}'
-                    )
+                color=0xFFFF00,
+                title=f'{token.title()} Price',
+                url=f'https://www.coingecko.com/en/coins/{token}'
+            )
             embed.set_thumbnail(
                 url=self.cg_icon
             )
@@ -257,15 +261,14 @@ class Coingecko(commands.Cog, name='Coin'):
             )
             embed.add_field(
                 name=f'Price ({currency.upper()})',
-                value='$' + '{:,}'.format(data[token][currency] * amt),
+                value=f'${data[token][currency] * amt:,}',
                 inline=True
             )
             embed.set_footer(
-                text=f'https://coingecko.com/',
+                text=self.base_url,
                 icon_url=self.cg_icon
             )
         await ctx.send(embed=embed)
-
 
     @coin.command(
         name='graph',
@@ -279,25 +282,25 @@ class Coingecko(commands.Cog, name='Coin'):
 
             if not self.get_token(token):
                 embed = Embed(
-                        color=0xFFFF00,
-                        title='Error',
-                        description=f'Token: `{token_err}` invalid or not found!'
-                    )
+                    color=0xFFFF00,
+                    title='Error',
+                    description=f'Token: `{token_err}` invalid or not found!'
+                )
                 embed.set_footer(
-                    text=f'https://coingecko.com/',
+                    text=self.base_url,
                     icon_url=self.cg_icon
                 )
                 return await ctx.send(embed=embed)
 
         if vs_currency not in self.currencies:
             embed = Embed(
-                    color=0xFFFF00,
-                    title='Error',
-                    description=f"{vs_currency.upper()} not found, supported currencies:\n"+
-                                f"```{', '.join([x for x in self.currencies])}```"
-                )
+                color=0xFFFF00,
+                title='Error',
+                description=f"{vs_currency.upper()} not found, supported currencies:\n" +
+                f"```{', '.join([x for x in self.currencies])}```"
+            )
             embed.set_footer(
-                text=f'https://coingecko.com/',
+                text=self.base_url,
                 icon_url=self.cg_icon
             )
             return await ctx.send(embed=embed)
@@ -319,19 +322,19 @@ class Coingecko(commands.Cog, name='Coin'):
         aliases=['miner', 'gw'],
         hidden=True
     )
-    async def helium_miner_stats(self, ctx):
+    async def helium_miner_stats(self, ctx):  # pylint: disable=C0116
         try:
-            async with self.client.session.get('http://wdr.thruhere.net:62280/info/system', timeout=10) as response:
+            async with self.client.session.get('http://wdr.thruhere.net:62280/info/system', timeout=10) as response:  # pylint: disable=C0301
                 data = await response.json()
 
                 embed = Embed(
-                            color=0xFFFF00,
-                            title='Helium Miner',
-                            url=f"https://explorer.helium.com/hotspots/{data['onboard_key']}",
-                            description=f"{' '.join(x.title() for x in data['animal_name'].split('-'))}",
-                        )
+                    color=0xFFFF00,
+                    title='Helium Miner',
+                    url=f"https://explorer.helium.com/hotspots/{data['onboard_key']}",
+                    description=f"{' '.join(x.title() for x in data['animal_name'].split('-'))}",
+                )
                 embed.set_thumbnail(
-                    url='https://cdn.discordapp.com/attachments/788621973709127693/999838638827380806/hnt.png'
+                    url='https://cdn.discordapp.com/attachments/788621973709127693/999838638827380806/hnt.png'  # pylint: disable=C0301
                 )
                 embed.add_field(
                     name='CPU Temp',
@@ -365,21 +368,23 @@ class Coingecko(commands.Cog, name='Coin'):
                 )
                 embed.set_footer(
                     text=f"{' '.join(x.title() for x in data['animal_name'].split('-'))}",
-                    icon_url='https://cdn.discordapp.com/attachments/788621973709127693/999838638827380806/hnt.png'
+                    icon_url='https://cdn.discordapp.com/attachments/788621973709127693/999838638827380806/hnt.png'  # pylint: disable=C0301
                 )
                 await ctx.send(embed=embed)
 
-        except Exception as e:
-                embed = Embed(
-                    color=0xFFFF00,
-                    title='Error',
-                    description=f'Connection Error, API offline\n\n```{e}```'
-                )
-                await ctx.send(embed=embed)
+        except Exception as e:  # pylint: disable=W0703,C0103
+            embed = Embed(
+                color=0xFFFF00,
+                title='Error',
+                description=f'Connection Error, API offline\n\n```{e}```'
+            )
+            await ctx.send(embed=embed)
 
     # ----------------------------------------------
     # Cog Tasks
     # ----------------------------------------------
+
+
 async def setup(client):
     """This is called when the cog is loaded via load_extension"""
     await client.add_cog(Coingecko(client))
